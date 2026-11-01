@@ -1,0 +1,137 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+import jwt
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from novaaltairapi.config import settings
+from novaaltairapi.db import get_session
+from novaaltairapi.models import Users
+from novaaltairapi.schemas import (UserIn, UserOut, UserInUsername, NewKeyIn, Key, KeyExtend, TokenResponse, KeyRemoveIn, RefreshToken)
+from novaaltairapi.security import hash_password, create_tokens, verify_access, verify_password
+from novaaltairapi.repository import (found_telegram_id, found_username, create_user, set_not_new, get_key, get_keys, register, login, get_by_username)
+from novaaltairapi.xui import create_key, delete_key, extend_key
+
+router = APIRouter()
+
+
+@router.get("/get/telegram_id/{telegram_id}", response_model=UserOut)
+async def get_user_telegram_id(telegram_id: int, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
+    user = await found_telegram_id(session, telegram_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    return user
+
+@router.get("/get/username/{username}", response_model=UserOut)
+async def get_user_username(username: str, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
+    user = await found_username(session, username)
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    return user
+
+
+@router.post("/user/new", response_model=UserOut, status_code=201)
+async def new_user(new_user: UserIn, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
+    user = await create_user(session, new_user.username, hash_password(new_user.password), new_user.telegram_id)
+    if not user:
+        raise HTTPException(status_code=409, detail="Пользователь уже существует")
+    await session.commit()
+        
+    return user
+
+@router.post("/user/register", response_model=UserOut)
+async def user_register(new_user: UserIn, session: AsyncSession = Depends(get_session)):
+    user = await register(session, new_user.username, hash_password(new_user.password))
+
+    if not user:
+        raise HTTPException(status_code=409, detail="Пользовать с эти логином уже существует")
+
+    await session.commit()
+    return user
+
+
+@router.post("/user/login", response_model=TokenResponse)
+async def user_login(new_user: UserIn, session: AsyncSession = Depends(get_session)):
+    access_token, refresh_token = create_tokens(new_user.username.strip().lower())
+
+    user = await login(session, new_user.username.strip().lower(), new_user.password, refresh_token=hash_password(refresh_token))
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный логин или пароль")
+    await session.commit()
+
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token, user=user)
+
+
+@router.post("/user/set/not_new", response_model=UserOut, status_code=201)
+async def set_user_not_new(user: UserInUsername, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
+    user = await set_not_new(session, user.username)
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    await session.commit()
+    return user
+
+@router.post("/user/key/add", response_model=Key, status_code=201)
+async def user_add_key(new_key: NewKeyIn, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
+    key = await create_key(session, new_key.username, new_key.email, new_key.day_expiry, payment_id=new_key.payment_id)
+    await session.commit()
+    return key
+
+@router.post("/user/key/remove", status_code=201)
+async def user_remove_key(key: KeyRemoveIn, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
+    await delete_key(session, key.email.strip().lower())
+    await session.commit()
+    return
+
+@router.post("/user/key/extend", response_model=Key, status_code=201)
+async def user_extend_key(key: KeyExtend, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
+    new_key = await extend_key(session, key.email.strip().lower(), key.day_expiry)
+    await session.commit()
+    return new_key
+
+    
+@router.get("/user/key/get/{email}", response_model=Key)
+async def get_key_(email: str, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
+    key = await get_key(session=session, email=email.strip().lower())
+    if not key:
+        raise HTTPException(status_code=404, detail="Ключ не найден")
+    return key
+
+@router.get("/user/keys/{username}", response_model=list[Key])
+async def get_user_keys(username: str, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
+    keys = await get_keys(session, username.strip().lower())
+    if not keys:
+        raise HTTPException(status_code=404, detail="Ключи не найдены")
+    return keys
+
+
+@router.post("/user/logout", status_code=201)
+async def user_logout(session: AsyncSession = Depends(get_session), auth_info: dict = Depends(verify_access)):
+    username = auth_info["identity"]
+    
+    user = await session.scalar(select(Users).where(Users.username == username))
+    if user:
+        user.refresh_token_hash = None
+        session.add(user)
+        await session.commit()
+        
+    return
+
+
+@router.post("/user/refresh", response_model=TokenResponse)
+async def refresh_access_token(refresh_token: RefreshToken, session: AsyncSession = Depends(get_session)):
+    try:
+        jwt.decode(refresh_token.refresh_token, settings.secret_key, algorithms=[settings.algorithm])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Срок действия refresh-токена истек")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Недействительный refresh-токен")
+
+    user = await get_by_username(session, refresh_token.username)
+    if user is None or not verify_password(user.refresh_token_hash, refresh_token.refresh_token):
+        return None
+
+    new_access_token, new_refresh_token = create_tokens(refresh_token.username)
+
+    user.refresh_token_hash = hash_password(new_refresh_token)
+    session.add(user)
+    await session.commit()
+
+    return TokenResponse(access_token=new_access_token, refresh_token_hash=new_refresh_token, user=user)

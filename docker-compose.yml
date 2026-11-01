@@ -1,0 +1,11 @@
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_URL: sqlite+aiosqlite:////data/database.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
