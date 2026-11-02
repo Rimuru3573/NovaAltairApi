@@ -30,7 +30,7 @@ async def get_user_username(username: str, session: AsyncSession = Depends(get_s
 
 @router.post("/user/new", response_model=UserOut, status_code=201)
 async def new_user(new_user: UserIn, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
-    user = await create_user(session, new_user.username, hash_password(new_user.password), new_user.telegram_id)
+    user = await create_user(session, new_user.username, hash_password(new_user.password), new_user.telegram_id, )
     if not user:
         raise HTTPException(status_code=409, detail="Пользователь уже существует")
     await session.commit()

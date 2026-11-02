@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from novaaltairapi.db import Base
 
@@ -10,7 +10,9 @@ class Users(Base):
     telegram_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     username: Mapped[str] = mapped_column(String(32), unique=True)
     password_hash: Mapped[str] = mapped_column(String(255))
-    is_new: Mapped[bool] = mapped_column(default=True)
+    is_new: Mapped[bool] = mapped_column(Boolean, default=True)
+    referred_by_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.telegram_id"), nullable=True, index=True, default=None)
+    is_referral_rewarded: Mapped[bool] = mapped_column(Boolean, default=False)
     refresh_token_hash: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 
     keys: Mapped[list["Keys"]] = relationship(back_populates="users", cascade="all, delete-orphan",)

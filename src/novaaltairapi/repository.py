@@ -11,7 +11,7 @@ async def get_by_username(session: AsyncSession, username: str) -> Users | None:
     else: return None
 
 
-async def create_user(session: AsyncSession, username: str, password_hash: str, telegram_id: int | None) -> Users | None:
+async def create_user(session: AsyncSession, username: str, password_hash: str, telegram_id: int | None, referred_by_id: int) -> Users | None:
 
     if await get_by_username(session, username.strip().lower()) is not None:
         return None
@@ -21,7 +21,7 @@ async def create_user(session: AsyncSession, username: str, password_hash: str, 
         if exists is not None:
             return None
 
-    user = Users(username=username.strip().lower(), password_hash=password_hash, telegram_id=telegram_id)
+    user = Users(username=username.strip().lower(), password_hash=password_hash, telegram_id=telegram_id, referred_by_id=referred_by_id)
     session.add(user)
     await session.flush()
     return user
