@@ -11,18 +11,13 @@ async def get_by_username(session: AsyncSession, username: str) -> Users | None:
     else: return None
 
 
-async def get_or_create_user(session: AsyncSession, username: str, password_hash: str, telegram_id: int | None, referred_by_id: int) -> Users | None:
+async def get_or_create_user(session: AsyncSession, username: str, password_hash: str, referred_by_id: int) -> Users | None:
     user = await get_by_username(session, username)
 
     if user:
         return user
-    
-    if telegram_id is not None:
-        exists = await session.scalar(select(Users.id).where(Users.telegram_id == telegram_id))
-        if exists is not None:
-            return None
 
-    user = Users(username=username.strip().lower(), password_hash=password_hash, telegram_id=telegram_id, referred_by_id=referred_by_id                                                             )
+    user = Users(username=username.strip().lower(), password_hash=password_hash, referred_by_id=referred_by_id                                                             )
     session.add(user)
     await session.flush()
     return user
@@ -44,18 +39,11 @@ async def register(session: AsyncSession, username: str, password_hash: str) -> 
     if user is not None:
         return None
     
-    user = Users(username=username.strip().lower(), password_hash=password_hash, telegram_id=None)
+    user = Users(username=username.strip().lower(), password_hash=password_hash)
     session.add(user)
     await session.flush()
     return user
 
-
-async def found_telegram_id(session: AsyncSession, telegram_id: int) -> Users | None:
-    user = await session.scalar(select(Users).where(Users.telegram_id == telegram_id))
-    if user is None:
-        return None
-    
-    return user
 
 async def found_username(session: AsyncSession, username: str) -> Users | None:
     user = await get_by_username(session, username)

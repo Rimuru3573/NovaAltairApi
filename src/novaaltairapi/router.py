@@ -13,13 +13,6 @@ from novaaltairapi.xui import create_key, delete_key, extend_key
 router = APIRouter()
 
 
-@router.get("/get/telegram_id/{telegram_id}", response_model=UserOut)
-async def get_user_telegram_id(telegram_id: int, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
-    user = await found_telegram_id(session, telegram_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
-    return user
-
 @router.get("/get/username/{username}", response_model=UserOut)
 async def get_user_username(username: str, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
     user = await found_username(session, username)
@@ -30,7 +23,7 @@ async def get_user_username(username: str, session: AsyncSession = Depends(get_s
 
 @router.post("/user/new", response_model=UserOut, status_code=201)
 async def new_user(new_user: UserIn, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
-    user = await get_or_create_user(session, new_user.username, hash_password(new_user.password), new_user.telegram_id, referred_by_id=new_user.referred_by_id)
+    user = await get_or_create_user(session, new_user.username, hash_password(new_user.password), referred_by_id=new_user.referred_by_id)
     if not user:
         raise HTTPException(status_code=409, detail="Пользователь с таким телеграм id уже существует.")
     await session.commit()

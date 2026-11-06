@@ -4,7 +4,6 @@ from pydantic import BaseModel, ConfigDict, Field
 class UserIn(BaseModel):
     username: str
     password: str
-    telegram_id: int | None = None
     referred_by_id: int | None = None
     is_referral_rewarded: bool = False
 
@@ -14,7 +13,6 @@ class UserOut(BaseModel):
 
     id: int
     username: str
-    telegram_id: int | None
     is_new: bool = True
 
 class TokenResponse(BaseModel):

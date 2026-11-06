@@ -7,7 +7,6 @@ class Users(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    telegram_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     username: Mapped[str] = mapped_column(String(32), unique=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     is_new: Mapped[bool] = mapped_column(Boolean, default=True)
