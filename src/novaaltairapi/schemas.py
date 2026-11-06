@@ -4,8 +4,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class UserIn(BaseModel):
     username: str
     password: str
-    telegram_id: int = None
-    referred_by_id: int = None
+    telegram_id: int | None = None
+    referred_by_id: int | None = None
     is_referral_rewarded: bool = False
 
 
@@ -38,6 +38,7 @@ class NewKeyIn(BaseModel):
 class KeyExtend(BaseModel):
     email: str
     day_expiry: int = Field(gt=0, le=365)
+    payment_id: str | None
 
 
 class Key(BaseModel):

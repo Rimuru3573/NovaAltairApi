@@ -31,7 +31,7 @@ async def create_key(session: AsyncSession, username: str, email: str, day_expir
             await api.client._post(api.client._url("panel/api/clients/add"),
                             {"Accept": "application/json"}, data)
         except ValueError:
-            raise HTTPException(status_code=401, detail="Неверное имя пользователя и/или такой полльзователь уже существует")
+            raise HTTPException(status_code=409, detail="Неверное имя пользователя и/или такой полльзователь уже существует")
         except Exception:
             raise HTTPException(status_code=500, detail="Ошибка панели")
 
@@ -42,7 +42,7 @@ async def create_key(session: AsyncSession, username: str, email: str, day_expir
             return key
         except Exception:
             await delete_key(session, email)
-            raise HTTPException(status_code=409, detail="Ошибка добавления ползователя в базу данных")
+            raise HTTPException(status_code=400, detail="Ошибка добавления ползователя в базу данных")
 
 
 async def delete_key(session: AsyncSession, email: str):
@@ -68,7 +68,7 @@ async def delete_key(session: AsyncSession, email: str):
         raise HTTPException(status_code=409, detail="Ошибка удаления конфига в базе данных")
 
 
-async def extend_key(session:AsyncSession, email: str, day_expiry: int) -> Keys:
+async def extend_key(session:AsyncSession, email: str, day_expiry: int, payment_id: str | None) -> Keys:
     await api.login()
 
 
@@ -100,7 +100,7 @@ async def extend_key(session:AsyncSession, email: str, day_expiry: int) -> Keys:
         raise HTTPException(status_code=409, detail="Ошибка продления конфига в панели")
 
     try:
-        key = await extend_key_db(session, email, new_expiry)
+        key = await extend_key_db(session, email, new_expiry, payment_id)
         return key
     except Exception:
         raise HTTPException(status_code=409, detail="Ошибка продления конфига в базе данных")

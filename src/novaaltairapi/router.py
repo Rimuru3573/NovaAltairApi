@@ -7,7 +7,7 @@ from novaaltairapi.db import get_session
 from novaaltairapi.models import Users
 from novaaltairapi.schemas import (UserIn, UserOut, UserInUsername, NewKeyIn, Key, KeyExtend, TokenResponse, KeyRemoveIn, RefreshToken)
 from novaaltairapi.security import hash_password, create_tokens, verify_access, verify_password
-from novaaltairapi.repository import (found_telegram_id, found_username, create_user, set_not_new, get_key, get_keys, register, login, get_by_username)
+from novaaltairapi.repository import (found_telegram_id, found_username, get_or_create_user, set_not_new, get_key, get_keys, register, login, get_by_username)
 from novaaltairapi.xui import create_key, delete_key, extend_key
 
 router = APIRouter()
@@ -30,11 +30,10 @@ async def get_user_username(username: str, session: AsyncSession = Depends(get_s
 
 @router.post("/user/new", response_model=UserOut, status_code=201)
 async def new_user(new_user: UserIn, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
-    user = await create_user(session, new_user.username, hash_password(new_user.password), new_user.telegram_id, )
+    user = await get_or_create_user(session, new_user.username, hash_password(new_user.password), new_user.telegram_id, referred_by_id=new_user.referred_by_id)
     if not user:
-        raise HTTPException(status_code=409, detail="Пользователь уже существует")
+        raise HTTPException(status_code=409, detail="Пользователь с таким телеграм id уже существует.")
     await session.commit()
-        
     return user
 
 @router.post("/user/register", response_model=UserOut)
@@ -61,8 +60,8 @@ async def user_login(new_user: UserIn, session: AsyncSession = Depends(get_sessi
 
 
 @router.post("/user/set/not_new", response_model=UserOut, status_code=201)
-async def set_user_not_new(user: UserInUsername, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
-    user = await set_not_new(session, user.username)
+async def set_user_not_new(user_: UserInUsername, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
+    user = await set_not_new(session, user_.username)
     if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
     await session.commit()
@@ -82,7 +81,7 @@ async def user_remove_key(key: KeyRemoveIn, session: AsyncSession = Depends(get_
 
 @router.post("/user/key/extend", response_model=Key, status_code=201)
 async def user_extend_key(key: KeyExtend, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
-    new_key = await extend_key(session, key.email.strip().lower(), key.day_expiry)
+    new_key = await extend_key(session, key.email.strip().lower(), key.day_expiry, key.payment_id)
     await session.commit()
     return new_key
 

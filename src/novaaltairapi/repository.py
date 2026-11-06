@@ -11,17 +11,18 @@ async def get_by_username(session: AsyncSession, username: str) -> Users | None:
     else: return None
 
 
-async def create_user(session: AsyncSession, username: str, password_hash: str, telegram_id: int | None, referred_by_id: int) -> Users | None:
+async def get_or_create_user(session: AsyncSession, username: str, password_hash: str, telegram_id: int | None, referred_by_id: int) -> Users | None:
+    user = await get_by_username(session, username)
 
-    if await get_by_username(session, username.strip().lower()) is not None:
-        return None
-
+    if user:
+        return user
+    
     if telegram_id is not None:
         exists = await session.scalar(select(Users.id).where(Users.telegram_id == telegram_id))
         if exists is not None:
             return None
 
-    user = Users(username=username.strip().lower(), password_hash=password_hash, telegram_id=telegram_id, referred_by_id=referred_by_id)
+    user = Users(username=username.strip().lower(), password_hash=password_hash, telegram_id=telegram_id, referred_by_id=referred_by_id                                                             )
     session.add(user)
     await session.flush()
     return user
@@ -100,9 +101,10 @@ async def remove_key(session: AsyncSession, email: str):
     await session.delete(key)
     await session.flush()
 
-async def extend_key_db(session: AsyncSession, email: str, new_expiry: datetime) -> Keys:
+async def extend_key_db(session: AsyncSession, email: str, new_expiry: datetime, payment_id: str | None) -> Keys:
     key = await session.scalar(select(Keys).where(Keys.email == email.strip().lower()))
     key.expiry_time = new_expiry
+    key.payment_id = payment_id
 
     await session.flush()
     return key
