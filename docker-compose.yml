@@ -9,3 +9,8 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/data
+      - /root/cert:/cert:ro
+    command: >
+      uvicorn main:app --host 0.0.0.0 --port 8000
+      --ssl-certfile /cert/rimuru3573.duckdns.org/fullchain.pem
+      --ssl-keyfile /cert/rimuru3573.duckdns.org/privkey.pem
