@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class UserIn(BaseModel):
     username: str
     password: str
-    referred_by_id: int | None = None
+    referred_by_user: int | None = None
     is_referral_rewarded: bool = False
 
 

@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import HTMLResponse
 import jwt
+from urllib.parse import quote
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from novaaltairapi.config import settings
@@ -7,7 +9,7 @@ from novaaltairapi.db import get_session
 from novaaltairapi.models import Users
 from novaaltairapi.schemas import (UserIn, UserOut, UserInUsername, NewKeyIn, Key, KeyExtend, TokenResponse, KeyRemoveIn, RefreshToken)
 from novaaltairapi.security import hash_password, create_tokens, verify_access, verify_password
-from novaaltairapi.repository import (found_telegram_id, found_username, get_or_create_user, set_not_new, get_key, get_keys, register, login, get_by_username)
+from novaaltairapi.repository import (found_username, get_or_create_user, set_not_new, get_key, get_keys, register, login, get_by_username)
 from novaaltairapi.xui import create_key, delete_key, extend_key
 
 router = APIRouter()
@@ -23,7 +25,7 @@ async def get_user_username(username: str, session: AsyncSession = Depends(get_s
 
 @router.post("/user/new", response_model=UserOut, status_code=201)
 async def new_user(new_user: UserIn, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
-    user = await get_or_create_user(session, new_user.username, hash_password(new_user.password), referred_by_id=new_user.referred_by_id)
+    user = await get_or_create_user(session, new_user.username, hash_password(new_user.password), referred_by_user=new_user.referred_by_user)
     if not user:
         raise HTTPException(status_code=409, detail="Пользователь с таким телеграм id уже существует.")
     await session.commit()
@@ -127,3 +129,56 @@ async def refresh_access_token(refresh_token: RefreshToken, session: AsyncSessio
     await session.commit()
 
     return TokenResponse(access_token=new_access_token, refresh_token_hash=new_refresh_token, user=user)
+
+
+def build_deeplink(client: str, sub_url: str, email: str) -> str:
+    encoded_sub = quote(sub_url, safe="")
+
+    match client.strip().lower():
+        case "happ":
+            return f"happ://add/{sub_url}"
+        case "v2rayng":
+            return f"v2rayng://install-config?url={encoded_sub}"
+        case "hiddify":
+            return f"hiddify://import/{sub_url}#{email}"
+        case "singbox":
+            return f"sing-box://import-remote-profile?url={encoded_sub}#{email}"
+        case "v2raytun":
+            return f"v2raytun://import/{sub_url}"
+        case "incy":
+            return f"incy://import/{sub_url}"
+
+
+@router.get("/connect", response_class=HTMLResponse)
+async def redirected_to_app(client: str = Query(...), sub: str = Query(...), email: str = Query("VPN")):
+    deeplink = build_deeplink(client=client, sub_url=sub, email=email)
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Подключение...</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <script>
+            window.onload = function() {{
+                window.location.href = "{deeplink}";
+                setTimeout(function() {{
+                    window.close();
+                }}, 3500);
+            }};
+        </script>
+        <style>
+            body {{ background: #121212; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }}
+            a {{ color: #7b61ff; text-decoration: none; border: 1px solid #7b61ff; padding: 12px 24px; border-radius: 8px; margin-top: 20px; }}
+        </style>
+    </head>
+    <body>
+        <h3>Открываем приложение...</h3>
+        <p>Если приложение не открылось автоматически, нажмите кнопку ниже:</p>
+        <a href="{deeplink}">Подключиться в {client}</a>
+    </body>
+    </html>
+    """
+
+    return HTMLResponse(content=html_content)

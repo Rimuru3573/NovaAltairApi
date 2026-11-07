@@ -11,13 +11,13 @@ async def get_by_username(session: AsyncSession, username: str) -> Users | None:
     else: return None
 
 
-async def get_or_create_user(session: AsyncSession, username: str, password_hash: str, referred_by_id: int) -> Users | None:
+async def get_or_create_user(session: AsyncSession, username: str, password_hash: str, referred_by_user: str) -> Users | None:
     user = await get_by_username(session, username)
 
     if user:
         return user
 
-    user = Users(username=username.strip().lower(), password_hash=password_hash, referred_by_id=referred_by_id                                                             )
+    user = Users(username=username.strip().lower(), password_hash=password_hash, referred_by_user=referred_by_user)
     session.add(user)
     await session.flush()
     return user
@@ -64,15 +64,8 @@ async def set_not_new(session: AsyncSession, username: str) -> Users | None:
     return user
 
 
-async def add_key(session: AsyncSession,
-                  username: str,
-                  email: str,
-                  sub_id: str,
-                  sub_link: str,
-                  expiry_time: datetime,
-                  payment_id: str | None
-                ) -> Keys:
-    
+async def add_key(session: AsyncSession, username: str, email: str, sub_id: str, sub_link: str, expiry_time: datetime, payment_id: str | None ) -> Keys:
+
     key = Keys(email=email.strip().lower(),
                sub_id=sub_id,
                expiry_time=expiry_time,
