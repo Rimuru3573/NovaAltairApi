@@ -15,5 +15,5 @@ async def lifespan(app: FastAPI):
         await engine.dispose()
 
 
-app = FastAPI(title="NovaAltairApi", lifespan=lifespan)
+app = FastAPI(title="NovaAltairApi", lifespan=lifespan, openapi_url=None)
 app.include_router(router)

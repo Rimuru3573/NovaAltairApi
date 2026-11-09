@@ -10,7 +10,7 @@ class Users(Base):
     username: Mapped[str] = mapped_column(String(32), unique=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     is_new: Mapped[bool] = mapped_column(Boolean, default=True)
-    referred_by_user: Mapped[str | None] = mapped_column(BigInteger, ForeignKey("users.username"), nullable=True, default=None)
+    referred_by_user: Mapped[str | None] = mapped_column(String(32), ForeignKey("users.username"), nullable=True, default=None)
     is_referral_rewarded: Mapped[bool] = mapped_column(Boolean, default=False)
     refresh_token_hash: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 

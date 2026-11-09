@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class UserIn(BaseModel):
     username: str
     password: str
-    referred_by_user: int | None = None
+    referred_by_user: str | None = None
     is_referral_rewarded: bool = False
 
 
@@ -31,6 +31,7 @@ class NewKeyIn(BaseModel):
     username: str
     email: str
     day_expiry: int = Field(gt=0, le=365)
+    limit_hwid: int = 0
     payment_id: str | None = None
 
 class KeyExtend(BaseModel):

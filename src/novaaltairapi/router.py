@@ -9,8 +9,9 @@ from novaaltairapi.db import get_session
 from novaaltairapi.models import Users
 from novaaltairapi.schemas import (UserIn, UserOut, UserInUsername, NewKeyIn, Key, KeyExtend, TokenResponse, KeyRemoveIn, RefreshToken)
 from novaaltairapi.security import hash_password, create_tokens, verify_access, verify_password
-from novaaltairapi.repository import (found_username, get_or_create_user, set_not_new, get_key, get_keys, register, login, get_by_username)
-from novaaltairapi.xui import create_key, delete_key, extend_key
+from novaaltairapi.repository import (found_username, get_or_create_user, set_not_new, get_key, get_keys, 
+                                      register, login, get_by_username, get_count_referrals, get_count_referrals_all, referral_rewarded)
+from novaaltairapi.xui import create_key, delete_key, extend_key, reload_key
 
 router = APIRouter()
 
@@ -64,7 +65,7 @@ async def set_user_not_new(user_: UserInUsername, session: AsyncSession = Depend
 
 @router.post("/user/key/add", response_model=Key, status_code=201)
 async def user_add_key(new_key: NewKeyIn, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
-    key = await create_key(session, new_key.username, new_key.email, new_key.day_expiry, payment_id=new_key.payment_id)
+    key = await create_key(session, new_key=new_key)
     await session.commit()
     return key
 
@@ -73,6 +74,13 @@ async def user_remove_key(key: KeyRemoveIn, session: AsyncSession = Depends(get_
     await delete_key(session, key.email.strip().lower())
     await session.commit()
     return
+
+@router.post("/user/key/reload", response_model=Key)
+async def user_key_reload(new_key: NewKeyIn, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
+    key = await reload_key(session=session, email=new_key.email.strip().lower(), username=new_key.username.strip().lower())
+    await session.commit()
+    return key
+
 
 @router.post("/user/key/extend", response_model=Key, status_code=201)
 async def user_extend_key(key: KeyExtend, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
@@ -182,3 +190,21 @@ async def redirected_to_app(client: str = Query(...), sub: str = Query(...), ema
     """
 
     return HTMLResponse(content=html_content)
+
+
+@router.get("/user/get/referrals/all/{username}")
+async def get_referrals_all(username: str, session: AsyncSession = Depends(get_session), auth_info: dict = Depends(verify_access)) -> dict[str, int]:
+    count = await get_count_referrals_all(session=session, username=username.strip().lower())
+    return {"count": count}
+
+@router.get("/user/get/referrals/{username}")
+async def get_referrals(username: str, session: AsyncSession = Depends(get_session), auth_info: dict = Depends(verify_access)) -> dict[str, int]:
+    count = await get_count_referrals(session=session, username=username.strip().lower())
+    return {"count": count}
+
+@router.post("/user/referral/reward", response_model=Key)
+async def referral_reward(new_key: NewKeyIn, session: AsyncSession = Depends(get_session), auth_info: dict = Depends(verify_access)):
+    await referral_rewarded(session=session, username=new_key.username)
+    key = await extend_key(session=session, email=new_key.email.strip().lower(), day_expiry=(new_key.day_expiry), payment_id=new_key.payment_id)
+    await session.commit()
+    return key    

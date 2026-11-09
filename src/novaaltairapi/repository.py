@@ -1,6 +1,6 @@
 from datetime import datetime
 from novaaltairapi.models import Users, Keys
-from sqlalchemy import select
+from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from novaaltairapi.security import verify_password
 
@@ -101,6 +101,34 @@ async def get_keys(session: AsyncSession, username: str) -> list[Keys]:
         select(Keys).where(Keys.user_username == username.strip().lower())
     )
     return list(keys)
+
+async def get_count_referrals(session: AsyncSession, username: str) -> int:
+    count = await session.scalar(
+        select(func.count()).where(
+            Users.referred_by_user == username,
+            Users.is_referral_rewarded == False
+        )
+    )
+
+    return count
+
+async def get_count_referrals_all(session: AsyncSession, username: str) -> int:
+    count = await session.scalar(select(func.count()).where(Users.referred_by_user == username))
+    return count
+
+
+async def referral_rewarded(session: AsyncSession, username: str):
+    await session.execute(update(Users).where(
+        Users.referred_by_user == username,
+        Users.is_referral_rewarded.is_(False)
+    ).values(is_referral_rewarded=True))
+
+    await session.flush()
+
+
+
+
+
 
 # Admin Functional:
 # async def set_new(session: AsyncSession, username: str) -> Users:

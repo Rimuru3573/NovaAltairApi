@@ -8,17 +8,19 @@ from novaaltairapi.config import settings
 from novaaltairapi.repository import add_key, remove_key, extend_key_db
 from sqlalchemy import select
 
+from novaaltairapi.schemas import NewKeyIn
+
 api = py3xui.AsyncApi(settings.xui_path, settings.xui_login, settings.xui_password, use_tls_verify=False)
 
-async def create_key(session: AsyncSession, username: str, email: str, day_expiry: int, payment_id=None) -> Keys:
+async def create_key(session: AsyncSession, new_key: NewKeyIn) -> Keys:
         await api.login()
-        time_datetime = datetime.now(timezone.utc) + timedelta(days=day_expiry)
+        time_datetime = datetime.now(timezone.utc) + timedelta(days=new_key.day_expiry)
         sub_id = uuid.uuid4().hex
         client_uuid = str(uuid.uuid4())
 
         client = py3xui.Client(
             id=client_uuid,
-            email=email,
+            email=new_key.email,
             enable=True,
             expiry_time=int(time_datetime.timestamp() * 1000),
             sub_id=sub_id,
@@ -34,14 +36,23 @@ async def create_key(session: AsyncSession, username: str, email: str, day_expir
             raise HTTPException(status_code=409, detail="Неверное имя пользователя и/или такой полльзователь уже существует")
         except Exception:
             raise HTTPException(status_code=500, detail="Ошибка панели")
-
+        
+        try:
+            await api.client._post(
+                api.client._url("panel/api/clients/bulkAdjust"),
+                {"Accept": "application/json"},
+                {"emails": [new_key.email], "limitHwid": new_key.limit_hwid},
+            )
+        except Exception:
+            raise HTTPException(status_code=500, detail="Не удалось выставить лимит устройств")
+                
         sub_link = f"{settings.xui_sub_base}/{sub_id}"
         
         try:
-            key = await add_key(session, username.strip().lower(), email, sub_id, sub_link, time_datetime, payment_id)
+            key = await add_key(session, new_key.username.strip().lower(), new_key.email, sub_id, sub_link, time_datetime, new_key.payment_id)
             return key
         except Exception:
-            await delete_key(session, email)
+            await delete_key(session, new_key.email)
             raise HTTPException(status_code=400, detail="Ошибка добавления ползователя в базу данных")
 
 
@@ -53,10 +64,7 @@ async def delete_key(session: AsyncSession, email: str):
         if c.email == email:
             client = c
             break
-    
-        
     client_uuid = client.id
-    
     try:
         await api.client.delete(settings.inbound_ids[0], client_uuid)
     except Exception:
@@ -66,6 +74,46 @@ async def delete_key(session: AsyncSession, email: str):
         await remove_key(session, email.strip().lower())
     except Exception:
         raise HTTPException(status_code=409, detail="Ошибка удаления конфига в базе данных")
+
+
+async def reload_key(session: AsyncSession, email: str, username: str) -> Keys:
+    await api.login()
+
+    time_datetime = await session.scalar(select(Keys.expiry_time).where(Keys.email == email))
+
+    await delete_key(session, email)
+    await session.commit()
+
+
+    sub_id = uuid.uuid4().hex
+    client_uuid = str(uuid.uuid4())
+
+    client = py3xui.Client(
+        id=client_uuid,
+        email=email,
+        enable=True,
+        expiry_time=int(time_datetime.timestamp() * 1000),
+        sub_id=sub_id,
+    )
+    data = {
+        "client": client.model_dump(by_alias=True, exclude_defaults=True),
+        "inboundIds": settings.inbound_ids,
+    }
+    try:
+        await api.client._post(api.client._url("panel/api/clients/add"), {"Accept": "application/json"}, data)
+    except ValueError:
+        raise HTTPException(status_code=409, detail="Неверное имя пользователя и/или такой полльзователь уже существует")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Ошибка панели")
+
+    sub_link = f"{settings.xui_sub_base}/{sub_id}"
+    try:
+        key = await add_key(session, username, email, sub_id, sub_link, time_datetime, None)
+        return key
+    except Exception:
+        await delete_key(session, email)
+        raise HTTPException(status_code=400, detail="Ошибка добавления ползователя в базу данных")    
+
 
 
 async def extend_key(session:AsyncSession, email: str, day_expiry: int, payment_id: str | None) -> Keys:
@@ -83,7 +131,10 @@ async def extend_key(session:AsyncSession, email: str, day_expiry: int, payment_
 
 
     expiry_db = await session.scalar(select(Keys.expiry_time).where(Keys.email == email))
-    start = max(datetime.fromtimestamp(expiry_db / 1000, tz=timezone.utc), datetime.now(timezone.utc)) if client.expiry_time else datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
+    if expiry_db.tzinfo is None:
+        expiry_db = expiry_db.replace(tzinfo=timezone.utc)
+    start = max(expiry_db, now)
     new_expiry = start + timedelta(days=day_expiry)
     client_by_email.expiry_time = int(new_expiry.timestamp() * 1000)
         
@@ -104,3 +155,7 @@ async def extend_key(session:AsyncSession, email: str, day_expiry: int, payment_
         return key
     except Exception:
         raise HTTPException(status_code=409, detail="Ошибка продления конфига в базе данных")
+
+
+
+# TODO: написать функцию для получения устройств и покупки дополнительных
