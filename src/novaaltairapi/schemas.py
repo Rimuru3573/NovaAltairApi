@@ -37,6 +37,7 @@ class NewKeyIn(BaseModel):
 class KeyExtend(BaseModel):
     email: str
     day_expiry: int = Field(gt=0, le=365)
+    limit_hwid: int = 0
     payment_id: str | None
 
 

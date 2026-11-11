@@ -5,10 +5,10 @@ services:
     env_file: .env
     environment:
       DB_URL: sqlite+aiosqlite:////data/database.db
-      # UVICORN_SSL_CERTFILE: /cert/rimuru3573.duckdns.org/fullchain.pem
-      # UVICORN_SSL_KEYFILE: /cert/rimuru3573.duckdns.org/privkey.pem
+      #UVICORN_SSL_CERTFILE: /cert/rimuru3573.duckdns.org/fullchain.pem
+      #UVICORN_SSL_KEYFILE: /cert/rimuru3573.duckdns.org/privkey.pem
     ports:
       - "8000:8000"
     volumes:
       - ./data:/data
-      # - /root/cert:/cert:ro
+     # - /root/cert:/cert:ro

@@ -11,7 +11,7 @@ from novaaltairapi.schemas import (UserIn, UserOut, UserInUsername, NewKeyIn, Ke
 from novaaltairapi.security import hash_password, create_tokens, verify_access, verify_password
 from novaaltairapi.repository import (found_username, get_or_create_user, set_not_new, get_key, get_keys, 
                                       register, login, get_by_username, get_count_referrals, get_count_referrals_all, referral_rewarded)
-from novaaltairapi.xui import create_key, delete_key, extend_key, reload_key
+from novaaltairapi.xui import create_key, delete_key, extend_key, get_hwids, get_limithwid, reload_key
 
 router = APIRouter()
 
@@ -84,7 +84,7 @@ async def user_key_reload(new_key: NewKeyIn, session: AsyncSession = Depends(get
 
 @router.post("/user/key/extend", response_model=Key, status_code=201)
 async def user_extend_key(key: KeyExtend, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
-    new_key = await extend_key(session, key.email.strip().lower(), key.day_expiry, key.payment_id)
+    new_key = await extend_key(session, key=key)
     await session.commit()
     return new_key
 
@@ -207,4 +207,17 @@ async def referral_reward(new_key: NewKeyIn, session: AsyncSession = Depends(get
     await referral_rewarded(session=session, username=new_key.username)
     key = await extend_key(session=session, email=new_key.email.strip().lower(), day_expiry=(new_key.day_expiry), payment_id=new_key.payment_id)
     await session.commit()
-    return key    
+    return key 
+
+@router.get("/user/key/hwids/{email}", response_model=list[str])
+async def get_key_hwids(email: str, _auth_info: dict = Depends(verify_access)):
+    return await get_hwids(email.strip().lower())
+
+@router.get("/user/key/get/limithwid/{email}", response_model=int)
+async def get_limit_hwid(email: str, session: AsyncSession = Depends(get_session), _auth_info: dict = Depends(verify_access)):
+    return await get_limithwid(session=session, email=email.strip().lower())
+
+# @router.get("/user/hwid/delete/{email}/{id}")
+# async def hwid_delete(email: str, id: int, _auth_info: dict = Depends(verify_access)):
+#     await delete_hwid(email=email, id=id)
+#     return
